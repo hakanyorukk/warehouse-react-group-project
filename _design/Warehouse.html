@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Warehouse Inventory System</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: #f4f5f7;
+      color: #1a1a2e;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+    #root { display: flex; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useMemo } = React;
+
+// ── Seed Data ────────────────────────────────────────────────────────────────
+const CATEGORIES = [
+  { id: 1, name: "Electronics" },
+  { id: 2, name: "Furniture" },
+  { id: 3, name: "Stationery" },
+  { id: 4, name: "Cleaning Supplies" },
+];
+
+const SUPPLIERS = [
+  { id: 1, name: "TechDist Ltd",      contact_email: "orders@techdist.com",   phone: "01234 567890" },
+  { id: 2, name: "OfficeWorld",       contact_email: "supply@officeworld.com", phone: "01234 111222" },
+  { id: 3, name: "CleanCo",          contact_email: "info@cleanco.com",       phone: "01234 333444" },
+];
+
+const INITIAL_PRODUCTS = [
+  { id: 1, sku: "ELEC-001", name: "Laptop",          category_id: 1, unit: "pcs",  min_stock: 5  },
+  { id: 2, sku: "ELEC-002", name: "Monitor",         category_id: 1, unit: "pcs",  min_stock: 3  },
+  { id: 3, sku: "FURN-001", name: "Office Chair",    category_id: 2, unit: "pcs",  min_stock: 4  },
+  { id: 4, sku: "STAT-001", name: "A4 Paper (ream)", category_id: 3, unit: "reams",min_stock: 20 },
+  { id: 5, sku: "STAT-002", name: "Ballpoint Pens",  category_id: 3, unit: "box",  min_stock: 10 },
+  { id: 6, sku: "CLEN-001", name: "Floor Cleaner",   category_id: 4, unit: "litre",min_stock: 8  },
+];
+
+const INITIAL_MOVEMENTS = [
+  { id: 1, product_id: 1, supplier_id: 1, user_id: 1, movement_type: "IN",  quantity: 10, created_at: "2026-04-01T09:00:00Z", notes: "Initial stock" },
+  { id: 2, product_id: 2, supplier_id: 1, user_id: 1, movement_type: "IN",  quantity: 6,  created_at: "2026-04-02T10:30:00Z", notes: "" },
+  { id: 3, product_id: 3, supplier_id: 2, user_id: 1, movement_type: "IN",  quantity: 8,  created_at: "2026-04-03T11:00:00Z", notes: "" },
+  { id: 4, product_id: 4, supplier_id: 2, user_id: 1, movement_type: "IN",  quantity: 50, created_at: "2026-04-05T08:00:00Z", notes: "" },
+  { id: 5, product_id: 1, supplier_id: null, user_id: 1, movement_type: "OUT", quantity: 2, created_at: "2026-04-10T14:00:00Z", notes: "Issued to IT dept" },
+  { id: 6, product_id: 4, supplier_id: null, user_id: 1, movement_type: "OUT", quantity: 15, created_at: "2026-04-12T09:30:00Z", notes: "Office restock" },
+  { id: 7, product_id: 5, supplier_id: 2, user_id: 1, movement_type: "IN",  quantity: 20, created_at: "2026-04-15T10:00:00Z", notes: "" },
+  { id: 8, product_id: 6, supplier_id: 3, user_id: 1, movement_type: "IN",  quantity: 30, created_at: "2026-04-18T11:00:00Z", notes: "" },
+  { id: 9, product_id: 2, supplier_id: null, user_id: 1, movement_type: "OUT", quantity: 1, created_at: "2026-04-20T15:00:00Z", notes: "Replaced broken unit" },
+];
+
+const CURRENT_USER = { id: 1, full_name: "Alex Johnson", role: "warehouse_manager", email: "alex.j@warehouse.ac.uk" };
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function getStock(movements, products) {
+  const totals = {};
+  products.forEach(p => totals[p.id] = 0);
+  movements.forEach(m => {
+    if (m.movement_type === "IN")  totals[m.product_id] = (totals[m.product_id] || 0) + m.quantity;
+    if (m.movement_type === "OUT") totals[m.product_id] = (totals[m.product_id] || 0) - m.quantity;
+  });
+  return totals;
+}
+
+function fmtDate(iso) {
+  return new Date(iso).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" });
+}
+function fmtDateTime(iso) {
+  return new Date(iso).toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+
+// ── Icons (inline SVG) ────────────────────────────────────────────────────────
+const Icon = ({ name, size = 18, color = "currentColor" }) => {
+  const icons = {
+    dashboard: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
+    entry:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7-7 7 7"/></svg>,
+    writedown: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7 7 7-7"/></svg>,
+    report:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+    products:  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>,
+    warn:      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+    check:     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+    logout:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+    search:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+    export:    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  };
+  return icons[name] || null;
+};
+
+// ── Sidebar ──────────────────────────────────────────────────────────────────
+const NAV = [
+  { id: "dashboard", label: "Dashboard",   icon: "dashboard" },
+  { id: "entry",     label: "Stock Entry", icon: "entry"     },
+  { id: "writedown", label: "Write-Down",  icon: "writedown" },
+  { id: "report",    label: "Stock Report",icon: "report"    },
+  { id: "products",  label: "Products",    icon: "products"  },
+];
+
+function Sidebar({ page, setPage }) {
+  return (
+    <aside style={{
+      width: 220, background: "#1a1a2e", color: "#fff",
+      display: "flex", flexDirection: "column",
+      flexShrink: 0, height: "100vh"
+    }}>
+      <div style={{ padding: "24px 20px 16px" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "#6b7db3", marginBottom: 4, textTransform: "uppercase" }}>Warehouse</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", letterSpacing: "-0.02em" }}>Inventory System</div>
+      </div>
+
+      <div style={{ height: 1, background: "#2e2e4a", margin: "0 20px 16px" }}></div>
+
+      <nav style={{ flex: 1, padding: "0 12px" }}>
+        {NAV.map(n => {
+          const active = page === n.id;
+          return (
+            <button key={n.id} onClick={() => setPage(n.id)} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              width: "100%", padding: "10px 12px", borderRadius: 7,
+              background: active ? "#2e3a6e" : "transparent",
+              color: active ? "#fff" : "#8892b0",
+              border: "none", cursor: "pointer", fontSize: 14, fontWeight: active ? 600 : 400,
+              fontFamily: "inherit", marginBottom: 2,
+              transition: "background 0.15s, color 0.15s",
+            }}>
+              <Icon name={n.icon} size={16} color={active ? "#6c9fff" : "#6b7db3"} />
+              {n.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div style={{ padding: "16px 20px", borderTop: "1px solid #2e2e4a" }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#cdd6f4" }}>{CURRENT_USER.full_name}</div>
+        <div style={{ fontSize: 11, color: "#6b7db3", marginTop: 2 }}>{CURRENT_USER.role.replace("_", " ")}</div>
+      </div>
+    </aside>
+  );
+}
+
+// ── Page Header ───────────────────────────────────────────────────────────────
+function PageHeader({ title, subtitle }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: "#1a1a2e", letterSpacing: "-0.02em" }}>{title}</h1>
+      {subtitle && <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>{subtitle}</p>}
+    </div>
+  );
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, accent }) {
+  return (
+    <div style={{
+      background: "#fff", borderRadius: 10, padding: "18px 20px",
+      border: "1px solid #e5e7eb", flex: 1, minWidth: 140
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 8 }}>{label}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, color: accent || "#1a1a2e", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Table ────────────────────────────────────────────────────────────────────
+function Table({ columns, rows, emptyMsg = "No data" }) {
+  return (
+    <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ background: "#f8fafc" }}>
+            {columns.map(col => (
+              <th key={col.key} style={{
+                padding: "10px 16px", textAlign: col.right ? "right" : "left",
+                fontWeight: 600, fontSize: 11, textTransform: "uppercase",
+                letterSpacing: "0.07em", color: "#64748b",
+                borderBottom: "1px solid #e5e7eb"
+              }}>{col.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr><td colSpan={columns.length} style={{ padding: 32, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>{emptyMsg}</td></tr>
+          ) : rows.map((row, i) => (
+            <tr key={i} style={{ borderBottom: i < rows.length - 1 ? "1px solid #f1f5f9" : "none" }}>
+              {columns.map(col => (
+                <td key={col.key} style={{ padding: "10px 16px", textAlign: col.right ? "right" : "left", color: "#374151" }}>
+                  {row[col.key]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+function Badge({ type }) {
+  const styles = {
+    IN:  { bg: "#dcfce7", color: "#15803d", label: "IN"  },
+    OUT: { bg: "#fee2e2", color: "#b91c1c", label: "OUT" },
+    LOW: { bg: "#fef9c3", color: "#92400e", label: "LOW" },
+    OK:  { bg: "#f0fdf4", color: "#15803d", label: "OK"  },
+  };
+  const s = styles[type] || styles.OK;
+  return (
+    <span style={{
+      background: s.bg, color: s.color,
+      padding: "2px 8px", borderRadius: 4,
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.05em"
+    }}>{s.label}</span>
+  );
+}
+
+// ── Input / Select helpers ────────────────────────────────────────────────────
+function FormField({ label, error, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#374151", marginBottom: 5 }}>{label}</label>
+      {children}
+      {error && <div style={{ fontSize: 12, color: "#dc2626", marginTop: 4 }}>{error}</div>}
+    </div>
+  );
+}
+
+const inputStyle = {
+  width: "100%", padding: "9px 12px", border: "1px solid #d1d5db",
+  borderRadius: 7, fontSize: 14, fontFamily: "inherit",
+  background: "#fff", color: "#1a1a2e", outline: "none",
+};
+
+const btnPrimary = {
+  padding: "10px 22px", background: "#2e3a6e", color: "#fff",
+  border: "none", borderRadius: 7, fontSize: 14, fontWeight: 600,
+  fontFamily: "inherit", cursor: "pointer",
+};
+
+const btnSecondary = {
+  padding: "10px 22px", background: "#f1f5f9", color: "#374151",
+  border: "1px solid #d1d5db", borderRadius: 7, fontSize: 14, fontWeight: 500,
+  fontFamily: "inherit", cursor: "pointer",
+};
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function Toast({ msg, type, onClose }) {
+  const colors = { success: "#15803d", error: "#dc2626" };
+  return (
+    <div style={{
+      position: "fixed", bottom: 28, right: 28, zIndex: 999,
+      background: "#1a1a2e", color: "#fff", borderRadius: 9,
+      padding: "13px 20px", fontSize: 14, fontWeight: 500,
+      display: "flex", alignItems: "center", gap: 10,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+      borderLeft: `4px solid ${colors[type] || "#6c9fff"}`,
+      maxWidth: 340
+    }}>
+      {type === "success" && <Icon name="check" size={16} color="#4ade80" />}
+      {type === "error"   && <Icon name="warn"  size={16} color="#f87171" />}
+      <span>{msg}</span>
+      <button onClick={onClose} style={{ marginLeft: "auto", background: "none", border: "none", color: "#8892b0", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAGE: Dashboard
+// ════════════════════════════════════════════════════════════════════════════
+function DashboardPage({ products, movements, setPage }) {
+  const stock = getStock(movements, products);
+  const lowStock = products.filter(p => stock[p.id] <= p.min_stock);
+  const totalIn  = movements.filter(m => m.movement_type === "IN").reduce((s, m) => s + m.quantity, 0);
+  const totalOut = movements.filter(m => m.movement_type === "OUT").reduce((s, m) => s + m.quantity, 0);
+
+  const recent = [...movements].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
+
+  return (
+    <div>
+      <PageHeader title="Dashboard" subtitle={"Today — " + new Date().toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long", year:"numeric" })} />
+
+      <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+        <StatCard label="Total Products"   value={products.length} />
+        <StatCard label="Total In"         value={totalIn}  accent="#15803d" />
+        <StatCard label="Total Out"        value={totalOut} accent="#b91c1c" />
+        <StatCard label="Low Stock Alerts" value={lowStock.length} accent={lowStock.length > 0 ? "#d97706" : "#15803d"}
+          sub={lowStock.length > 0 ? "Needs attention" : "All levels OK"} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+        {/* Recent Movements */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Recent Movements</div>
+          <Table
+            columns={[
+              { key: "product", label: "Product" },
+              { key: "type",    label: "Type"    },
+              { key: "qty",     label: "Qty", right: true },
+              { key: "date",    label: "Date"    },
+            ]}
+            rows={recent.map(m => {
+              const p = products.find(x => x.id === m.product_id);
+              return {
+                product: p?.name || "—",
+                type: <Badge type={m.movement_type} />,
+                qty: m.quantity,
+                date: fmtDate(m.created_at),
+              };
+            })}
+          />
+        </div>
+
+        {/* Low Stock Alerts */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Low / Out of Stock</div>
+          {lowStock.length === 0 ? (
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: "20px 16px", textAlign: "center", color: "#15803d", fontSize: 13 }}>
+              All stock levels are above minimum thresholds.
+            </div>
+          ) : (
+            <Table
+              columns={[
+                { key: "product",  label: "Product"  },
+                { key: "sku",      label: "SKU"      },
+                { key: "current",  label: "Current", right: true },
+                { key: "min",      label: "Min",     right: true },
+              ]}
+              rows={lowStock.map(p => ({
+                product: p.name,
+                sku: <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "#64748b" }}>{p.sku}</span>,
+                current: <span style={{ fontWeight: 700, color: stock[p.id] <= 0 ? "#dc2626" : "#d97706" }}>{stock[p.id]}</span>,
+                min: p.min_stock,
+              }))}
+            />
+          )}
+
+          <div style={{ marginTop: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Stock Summary</div>
+            <Table
+              columns={[
+                { key: "product",  label: "Product"     },
+                { key: "qty",      label: "Qty",  right: true },
+                { key: "unit",     label: "Unit"        },
+                { key: "status",   label: "Status"      },
+              ]}
+              rows={products.map(p => ({
+                product: p.name,
+                qty: stock[p.id],
+                unit: p.unit,
+                status: <Badge type={stock[p.id] <= p.min_stock ? "LOW" : "OK"} />,
+              }))}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAGE: Stock Entry (IN)
+// ════════════════════════════════════════════════════════════════════════════
+function StockEntryPage({ products, movements, setMovements, categories, showToast }) {
+  const stock = getStock(movements, products);
+
+  const [form, setForm] = useState({ product_id: "", quantity: "", supplier_id: "", notes: "" });
+  const [errors, setErrors] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const selectedProduct = products.find(p => p.id === parseInt(form.product_id));
+  const selectedCategory = selectedProduct ? categories.find(c => c.id === selectedProduct.category_id) : null;
+
+  function set(key, val) { setForm(f => ({ ...f, [key]: val })); setErrors(e => ({ ...e, [key]: "" })); }
+
+  function validate() {
+    const e = {};
+    if (!form.product_id) e.product_id = "Please select a product";
+    if (!form.quantity || parseInt(form.quantity) <= 0) e.quantity = "Enter a valid quantity (> 0)";
+    return e;
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    const newMovement = {
+      id: Date.now(),
+      product_id: parseInt(form.product_id),
+      supplier_id: form.supplier_id ? parseInt(form.supplier_id) : null,
+      user_id: CURRENT_USER.id,
+      movement_type: "IN",
+      quantity: parseInt(form.quantity),
+      created_at: new Date().toISOString(),
+      notes: form.notes,
+    };
+    setMovements(m => [...m, newMovement]);
+    setSubmitted(true);
+    showToast(`Added ${form.quantity} × ${selectedProduct.name} to stock`, "success");
+    setTimeout(() => { setForm({ product_id: "", quantity: "", supplier_id: "", notes: "" }); setSubmitted(false); }, 2000);
+  }
+
+  return (
+    <div>
+      <PageHeader title="Stock Entry" subtitle="Record incoming goods — increases stock level" />
+      <div style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: 24, alignItems: "start" }}>
+
+        {/* Form */}
+        <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", padding: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 20, paddingBottom: 12, borderBottom: "1px solid #f1f5f9" }}>
+            New Inbound Entry
+          </div>
+          <form onSubmit={handleSubmit}>
+            <FormField label="Product *" error={errors.product_id}>
+              <select value={form.product_id} onChange={e => set("product_id", e.target.value)} style={{ ...inputStyle }}>
+                <option value="">— Select product —</option>
+                {categories.map(cat => (
+                  <optgroup key={cat.id} label={cat.name}>
+                    {products.filter(p => p.category_id === cat.id).map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </FormField>
+
+            {/* Dynamic info based on selected product */}
+            {selectedProduct && (
+              <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px 14px", marginBottom: 16, fontSize: 13 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  <div><span style={{ color: "#94a3b8" }}>SKU:</span> <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 500 }}>{selectedProduct.sku}</span></div>
+                  <div><span style={{ color: "#94a3b8" }}>Unit:</span> {selectedProduct.unit}</div>
+                  <div><span style={{ color: "#94a3b8" }}>Category:</span> {selectedCategory?.name}</div>
+                  <div><span style={{ color: "#94a3b8" }}>Current Stock:</span> <strong>{stock[selectedProduct.id]}</strong></div>
+                  <div><span style={{ color: "#94a3b8" }}>Min Stock:</span> {selectedProduct.min_stock}</div>
+                </div>
+              </div>
+            )}
+
+            <FormField label={`Quantity ${selectedProduct ? `(${selectedProduct.unit})` : ""} *`} error={errors.quantity}>
+              <input type="number" min="1" value={form.quantity} onChange={e => set("quantity", e.target.value)}
+                placeholder="Enter quantity" style={{ ...inputStyle }} />
+            </FormField>
+
+            {/* Show estimated new stock */}
+            {selectedProduct && form.quantity && parseInt(form.quantity) > 0 && (
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7, padding: "9px 13px", marginBottom: 16, fontSize: 13, color: "#166534" }}>
+                New stock level will be: <strong>{stock[selectedProduct.id] + parseInt(form.quantity)} {selectedProduct.unit}</strong>
+              </div>
+            )}
+
+            <FormField label="Supplier (optional)">
+              <select value={form.supplier_id} onChange={e => set("supplier_id", e.target.value)} style={{ ...inputStyle }}>
+                <option value="">— Select supplier —</option>
+                {SUPPLIERS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </FormField>
+
+            <FormField label="Notes (optional)">
+              <textarea value={form.notes} onChange={e => set("notes", e.target.value)}
+                placeholder="e.g. Delivery reference, condition notes..."
+                rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+            </FormField>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+              <button type="submit" style={{ ...btnPrimary, flex: 1 }}>
+                {submitted ? "✓ Recorded" : "Record Entry"}
+              </button>
+              <button type="button" style={{ ...btnSecondary }} onClick={() => { setForm({ product_id: "", quantity: "", supplier_id: "", notes: "" }); setErrors({}); }}>
+                Clear
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Recent IN movements */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Recent Stock Entries</div>
+          <Table
+            columns={[
+              { key: "date",     label: "Date/Time"  },
+              { key: "product",  label: "Product"    },
+              { key: "sku",      label: "SKU"        },
+              { key: "qty",      label: "Qty",  right: true },
+              { key: "supplier", label: "Supplier"   },
+              { key: "notes",    label: "Notes"      },
+            ]}
+            rows={[...movements].filter(m => m.movement_type === "IN").sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).map(m => {
+              const p = products.find(x => x.id === m.product_id);
+              const s = SUPPLIERS.find(x => x.id === m.supplier_id);
+              return {
+                date:     <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "#64748b" }}>{fmtDateTime(m.created_at)}</span>,
+                product:  p?.name,
+                sku:      <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "#64748b" }}>{p?.sku}</span>,
+                qty:      <span style={{ fontWeight: 700, color: "#15803d" }}>+{m.quantity}</span>,
+                supplier: s?.name || <span style={{ color: "#94a3b8" }}>—</span>,
+                notes:    m.notes || <span style={{ color: "#94a3b8" }}>—</span>,
+              };
+            })}
+            emptyMsg="No inbound entries yet"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAGE: Write-Down (OUT)
+// ════════════════════════════════════════════════════════════════════════════
+function WriteDownPage({ products, movements, setMovements, categories, showToast }) {
+  const stock = getStock(movements, products);
+  const [form, setForm] = useState({ product_id: "", quantity: "", notes: "" });
+  const [errors, setErrors] = useState({});
+
+  const selectedProduct = products.find(p => p.id === parseInt(form.product_id));
+  const currentStock = selectedProduct ? stock[selectedProduct.id] : 0;
+  const selectedCategory = selectedProduct ? categories.find(c => c.id === selectedProduct.category_id) : null;
+
+  function set(key, val) { setForm(f => ({ ...f, [key]: val })); setErrors(e => ({ ...e, [key]: "" })); }
+
+  function validate() {
+    const e = {};
+    if (!form.product_id) e.product_id = "Please select a product";
+    const qty = parseInt(form.quantity);
+    if (!form.quantity || qty <= 0) e.quantity = "Enter a valid quantity (> 0)";
+    else if (selectedProduct && qty > currentStock) e.quantity = `Cannot exceed current stock (${currentStock} ${selectedProduct.unit})`;
+    return e;
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    const newMovement = {
+      id: Date.now(),
+      product_id: parseInt(form.product_id),
+      supplier_id: null,
+      user_id: CURRENT_USER.id,
+      movement_type: "OUT",
+      quantity: parseInt(form.quantity),
+      created_at: new Date().toISOString(),
+      notes: form.notes,
+    };
+    setMovements(m => [...m, newMovement]);
+    showToast(`Written down ${form.quantity} × ${selectedProduct.name}`, "success");
+    setForm({ product_id: "", quantity: "", notes: "" });
+  }
+
+  const qty = parseInt(form.quantity) || 0;
+  const remaining = currentStock - qty;
+
+  return (
+    <div>
+      <PageHeader title="Write-Down" subtitle="Record outgoing goods or stock reductions — decreases stock level" />
+      <div style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: 24, alignItems: "start" }}>
+
+        <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", padding: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 20, paddingBottom: 12, borderBottom: "1px solid #f1f5f9" }}>
+            New Outbound / Write-Down
+          </div>
+          <form onSubmit={handleSubmit}>
+            <FormField label="Product *" error={errors.product_id}>
+              <select value={form.product_id} onChange={e => set("product_id", e.target.value)} style={{ ...inputStyle }}>
+                <option value="">— Select product —</option>
+                {categories.map(cat => (
+                  <optgroup key={cat.id} label={cat.name}>
+                    {products.filter(p => p.category_id === cat.id).map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </FormField>
+
+            {selectedProduct && (
+              <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px 14px", marginBottom: 16, fontSize: 13 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                  <div><span style={{ color: "#94a3b8" }}>SKU:</span> <span style={{ fontFamily: "IBM Plex Mono", fontWeight: 500 }}>{selectedProduct.sku}</span></div>
+                  <div><span style={{ color: "#94a3b8" }}>Unit:</span> {selectedProduct.unit}</div>
+                  <div><span style={{ color: "#94a3b8" }}>Category:</span> {selectedCategory?.name}</div>
+                  <div><span style={{ color: "#94a3b8" }}>Current Stock:</span> <strong style={{ color: currentStock <= selectedProduct.min_stock ? "#d97706" : "#15803d" }}>{currentStock}</strong></div>
+                </div>
+              </div>
+            )}
+
+            <FormField label={`Quantity ${selectedProduct ? `(${selectedProduct.unit})` : ""} *`} error={errors.quantity}>
+              <input type="number" min="1" value={form.quantity} onChange={e => set("quantity", e.target.value)}
+                placeholder="Enter quantity" style={{ ...inputStyle }} />
+            </FormField>
+
+            {selectedProduct && qty > 0 && qty <= currentStock && (
+              <div style={{
+                background: remaining <= selectedProduct.min_stock ? "#fef9c3" : "#f0fdf4",
+                border: `1px solid ${remaining <= selectedProduct.min_stock ? "#fde68a" : "#bbf7d0"}`,
+                borderRadius: 7, padding: "9px 13px", marginBottom: 16, fontSize: 13,
+                color: remaining <= selectedProduct.min_stock ? "#92400e" : "#166534"
+              }}>
+                {remaining <= selectedProduct.min_stock && <span>⚠ </span>}
+                Stock after write-down: <strong>{remaining} {selectedProduct.unit}</strong>
+                {remaining <= selectedProduct.min_stock && " — below minimum threshold"}
+              </div>
+            )}
+
+            <FormField label="Reason / Notes *">
+              <textarea value={form.notes} onChange={e => set("notes", e.target.value)}
+                placeholder="e.g. Issued to department, damaged, expired..."
+                rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+            </FormField>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+              <button type="submit" style={{ ...btnPrimary, flex: 1, background: "#7f1d1d" }}>Record Write-Down</button>
+              <button type="button" style={{ ...btnSecondary }} onClick={() => { setForm({ product_id: "", quantity: "", notes: "" }); setErrors({}); }}>Clear</button>
+            </div>
+          </form>
+        </div>
+
+        {/* Recent OUT movements */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Recent Write-Downs</div>
+          <Table
+            columns={[
+              { key: "date",    label: "Date/Time" },
+              { key: "product", label: "Product"   },
+              { key: "sku",     label: "SKU"       },
+              { key: "qty",     label: "Qty", right: true },
+              { key: "notes",   label: "Reason"    },
+            ]}
+            rows={[...movements].filter(m => m.movement_type === "OUT").sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).map(m => {
+              const p = products.find(x => x.id === m.product_id);
+              return {
+                date:    <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "#64748b" }}>{fmtDateTime(m.created_at)}</span>,
+                product: p?.name,
+                sku:     <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "#64748b" }}>{p?.sku}</span>,
+                qty:     <span style={{ fontWeight: 700, color: "#b91c1c" }}>−{m.quantity}</span>,
+                notes:   m.notes || <span style={{ color: "#94a3b8" }}>—</span>,
+              };
+            })}
+            emptyMsg="No write-downs yet"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAGE: Stock Report
+// ════════════════════════════════════════════════════════════════════════════
+function ReportPage({ products, movements, categories }) {
+  const [filterProduct,  setFilterProduct]  = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterFrom,     setFilterFrom]     = useState("");
+  const [filterTo,       setFilterTo]       = useState("");
+  const [filterType,     setFilterType]     = useState("");
+
+  const filtered = useMemo(() => {
+    return movements.filter(m => {
+      if (filterProduct  && m.product_id !== parseInt(filterProduct))  return false;
+      if (filterCategory) {
+        const p = products.find(x => x.id === m.product_id);
+        if (!p || p.category_id !== parseInt(filterCategory)) return false;
+      }
+      if (filterType && m.movement_type !== filterType) return false;
+      if (filterFrom && new Date(m.created_at) < new Date(filterFrom)) return false;
+      if (filterTo   && new Date(m.created_at) > new Date(filterTo + "T23:59:59")) return false;
+      return true;
+    });
+  }, [movements, filterProduct, filterCategory, filterType, filterFrom, filterTo]);
+
+  // Aggregate by product
+  const byProduct = useMemo(() => {
+    const map = {};
+    filtered.forEach(m => {
+      if (!map[m.product_id]) map[m.product_id] = { in: 0, out: 0, count: 0 };
+      if (m.movement_type === "IN")  map[m.product_id].in  += m.quantity;
+      if (m.movement_type === "OUT") map[m.product_id].out += m.quantity;
+      map[m.product_id].count++;
+    });
+    return map;
+  }, [filtered]);
+
+  const totalIn  = filtered.filter(m => m.movement_type === "IN").reduce((s, m) => s + m.quantity, 0);
+  const totalOut = filtered.filter(m => m.movement_type === "OUT").reduce((s, m) => s + m.quantity, 0);
+
+  function exportCSV() {
+    const header = "Date,Product,SKU,Type,Quantity,Notes\n";
+    const rows = filtered.map(m => {
+      const p = products.find(x => x.id === m.product_id);
+      return [fmtDateTime(m.created_at), p?.name || "", p?.sku || "", m.movement_type, m.quantity, m.notes || ""].join(",");
+    }).join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a"); a.href = url; a.download = "stock_report.csv"; a.click();
+  }
+
+  const filteredProducts = filterCategory
+    ? products.filter(p => p.category_id === parseInt(filterCategory))
+    : products;
+
+  return (
+    <div>
+      <PageHeader title="Stock Report" subtitle="Filter and analyse stock movements" />
+
+      {/* Filters */}
+      <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", padding: "16px 20px", marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 12 }}>Filters</div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ flex: "1 1 160px" }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>Category</label>
+            <select value={filterCategory} onChange={e => { setFilterCategory(e.target.value); setFilterProduct(""); }} style={{ ...inputStyle }}>
+              <option value="">All categories</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: "1 1 180px" }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>Product</label>
+            <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} style={{ ...inputStyle }}>
+              <option value="">All products</option>
+              {filteredProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: "1 1 120px" }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>Type</label>
+            <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ ...inputStyle }}>
+              <option value="">IN + OUT</option>
+              <option value="IN">IN only</option>
+              <option value="OUT">OUT only</option>
+            </select>
+          </div>
+          <div style={{ flex: "1 1 130px" }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>From date</label>
+            <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} style={{ ...inputStyle }} />
+          </div>
+          <div style={{ flex: "1 1 130px" }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: "#64748b", display: "block", marginBottom: 4 }}>To date</label>
+            <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} style={{ ...inputStyle }} />
+          </div>
+          <button onClick={() => { setFilterProduct(""); setFilterCategory(""); setFilterFrom(""); setFilterTo(""); setFilterType(""); }}
+            style={{ ...btnSecondary, height: 40, whiteSpace: "nowrap" }}>Clear Filters</button>
+          <button onClick={exportCSV} style={{ ...btnPrimary, height: 40, display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+            <Icon name="export" size={14} /> Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Summary stats for filtered data */}
+      <div style={{ display: "flex", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
+        <StatCard label="Movements" value={filtered.length} />
+        <StatCard label="Total IN"  value={totalIn}  accent="#15803d" />
+        <StatCard label="Total OUT" value={totalOut} accent="#b91c1c" />
+        <StatCard label="Net Change" value={(totalIn - totalOut >= 0 ? "+" : "") + (totalIn - totalOut)}
+          accent={totalIn - totalOut >= 0 ? "#15803d" : "#b91c1c"} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+
+        {/* Summary by product */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Summary by Product</div>
+          <Table
+            columns={[
+              { key: "product", label: "Product" },
+              { key: "in",      label: "IN",   right: true },
+              { key: "out",     label: "OUT",  right: true },
+              { key: "net",     label: "Net",  right: true },
+            ]}
+            rows={Object.entries(byProduct).map(([pid, d]) => {
+              const p = products.find(x => x.id === parseInt(pid));
+              const net = d.in - d.out;
+              return {
+                product: p?.name || "—",
+                in:  <span style={{ color: "#15803d", fontWeight: 600 }}>{d.in}</span>,
+                out: <span style={{ color: "#b91c1c", fontWeight: 600 }}>{d.out}</span>,
+                net: <span style={{ color: net >= 0 ? "#15803d" : "#b91c1c", fontWeight: 700 }}>{net >= 0 ? "+" : ""}{net}</span>,
+              };
+            })}
+            emptyMsg="No movements match the selected filters"
+          />
+        </div>
+
+        {/* Detailed movement log */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Movement Log ({filtered.length})</div>
+          <div style={{ maxHeight: 400, overflowY: "auto", borderRadius: 10, border: "1px solid #e5e7eb" }}>
+            <Table
+              columns={[
+                { key: "date",    label: "Date"    },
+                { key: "product", label: "Product" },
+                { key: "type",    label: "Type"    },
+                { key: "qty",     label: "Qty", right: true },
+              ]}
+              rows={[...filtered].sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).map(m => {
+                const p = products.find(x => x.id === m.product_id);
+                return {
+                  date:    <span style={{ fontFamily: "IBM Plex Mono", fontSize: 11, color: "#64748b" }}>{fmtDate(m.created_at)}</span>,
+                  product: p?.name,
+                  type:    <Badge type={m.movement_type} />,
+                  qty:     <span style={{ fontWeight: 700, color: m.movement_type === "IN" ? "#15803d" : "#b91c1c" }}>
+                    {m.movement_type === "IN" ? "+" : "−"}{m.quantity}
+                  </span>,
+                };
+              })}
+              emptyMsg="No movements match filters"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAGE: Products
+// ════════════════════════════════════════════════════════════════════════════
+function ProductsPage({ products, setProducts, movements, categories }) {
+  const stock = getStock(movements, products);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ sku: "", name: "", category_id: "", unit: "pcs", min_stock: "5" });
+  const [errors, setErrors] = useState({});
+
+  const filtered = products.filter(p => {
+    if (filterCat && p.category_id !== parseInt(filterCat)) return false;
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.sku.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })); setErrors(e => ({ ...e, [k]: "" })); }
+
+  function validate() {
+    const e = {};
+    if (!form.sku.trim()) e.sku = "SKU is required";
+    if (!form.name.trim()) e.name = "Name is required";
+    if (!form.category_id) e.category_id = "Select a category";
+    if (!form.unit.trim()) e.unit = "Unit is required";
+    if (!form.min_stock || parseInt(form.min_stock) < 0) e.min_stock = "Enter a valid minimum stock";
+    if (products.find(p => p.sku.toLowerCase() === form.sku.trim().toLowerCase())) e.sku = "SKU already exists";
+    return e;
+  }
+
+  function handleAdd(e) {
+    e.preventDefault();
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    setProducts(p => [...p, {
+      id: Date.now(), sku: form.sku.trim().toUpperCase(),
+      name: form.name.trim(), category_id: parseInt(form.category_id),
+      unit: form.unit.trim(), min_stock: parseInt(form.min_stock),
+    }]);
+    setShowAdd(false);
+    setForm({ sku: "", name: "", category_id: "", unit: "pcs", min_stock: "5" });
+  }
+
+  return (
+    <div>
+      <PageHeader title="Products" subtitle="Manage the product catalogue" />
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
+        <div style={{ position: "relative", flex: 1, maxWidth: 280 }}>
+          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }}>
+            <Icon name="search" size={15} />
+          </span>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or SKU…"
+            style={{ ...inputStyle, paddingLeft: 34 }} />
+        </div>
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ ...inputStyle, width: 180 }}>
+          <option value="">All categories</option>
+          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <button onClick={() => setShowAdd(s => !s)} style={{ ...btnPrimary, marginLeft: "auto", whiteSpace: "nowrap" }}>
+          {showAdd ? "Cancel" : "+ Add Product"}
+        </button>
+      </div>
+
+      {showAdd && (
+        <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb", padding: 20, marginBottom: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: "#374151" }}>Add New Product</div>
+          <form onSubmit={handleAdd}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+              <FormField label="SKU *" error={errors.sku}>
+                <input value={form.sku} onChange={e => set("sku", e.target.value)} placeholder="e.g. ELEC-005" style={{ ...inputStyle }} />
+              </FormField>
+              <FormField label="Name *" error={errors.name}>
+                <input value={form.name} onChange={e => set("name", e.target.value)} placeholder="Product name" style={{ ...inputStyle }} />
+              </FormField>
+              <FormField label="Category *" error={errors.category_id}>
+                <select value={form.category_id} onChange={e => set("category_id", e.target.value)} style={{ ...inputStyle }}>
+                  <option value="">— Select —</option>
+                  {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Unit *" error={errors.unit}>
+                <input value={form.unit} onChange={e => set("unit", e.target.value)} placeholder="pcs / kg / litre…" style={{ ...inputStyle }} />
+              </FormField>
+              <FormField label="Min Stock *" error={errors.min_stock}>
+                <input type="number" min="0" value={form.min_stock} onChange={e => set("min_stock", e.target.value)} style={{ ...inputStyle }} />
+              </FormField>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button type="submit" style={{ ...btnPrimary }}>Save Product</button>
+              <button type="button" style={{ ...btnSecondary }} onClick={() => { setShowAdd(false); setErrors({}); }}>Cancel</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <Table
+        columns={[
+          { key: "sku",      label: "SKU"         },
+          { key: "name",     label: "Name"        },
+          { key: "category", label: "Category"    },
+          { key: "stock",    label: "Stock",  right: true },
+          { key: "unit",     label: "Unit"        },
+          { key: "min",      label: "Min",    right: true },
+          { key: "status",   label: "Status"      },
+        ]}
+        rows={filtered.map(p => {
+          const cat = categories.find(c => c.id === p.category_id);
+          const s = stock[p.id] ?? 0;
+          return {
+            sku:      <span style={{ fontFamily: "IBM Plex Mono", fontSize: 12, color: "#64748b" }}>{p.sku}</span>,
+            name:     <span style={{ fontWeight: 500 }}>{p.name}</span>,
+            category: cat?.name || "—",
+            stock:    <span style={{ fontWeight: 700, color: s <= p.min_stock ? "#d97706" : "#15803d" }}>{s}</span>,
+            unit:     p.unit,
+            min:      p.min_stock,
+            status:   <Badge type={s <= p.min_stock ? "LOW" : "OK"} />,
+          };
+        })}
+        emptyMsg="No products found"
+      />
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ROOT APP
+// ════════════════════════════════════════════════════════════════════════════
+function App() {
+  const [page, setPage] = useState("dashboard");
+  const [products,  setProducts]  = useState(INITIAL_PRODUCTS);
+  const [movements, setMovements] = useState(INITIAL_MOVEMENTS);
+  const [toast, setToast] = useState(null);
+
+  function showToast(msg, type = "success") {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  const pageProps = { products, setProducts, movements, setMovements, categories: CATEGORIES, showToast };
+
+  return (
+    <div style={{ display: "flex", width: "100%", height: "100vh" }}>
+      <Sidebar page={page} setPage={setPage} />
+
+      <main style={{ flex: 1, overflow: "auto", padding: 28, background: "#f4f5f7" }}>
+        {page === "dashboard" && <DashboardPage {...pageProps} setPage={setPage} />}
+        {page === "entry"     && <StockEntryPage  {...pageProps} />}
+        {page === "writedown" && <WriteDownPage   {...pageProps} />}
+        {page === "report"    && <ReportPage products={products} movements={movements} categories={CATEGORIES} />}
+        {page === "products"  && <ProductsPage    {...pageProps} />}
+      </main>
+
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

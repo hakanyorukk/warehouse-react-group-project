@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:claude.ai)",
+      "Bash(npm --version)",
+      "PowerShell(node --version)",
+      "PowerShell(npm --version)",
+      "PowerShell(Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; $env:Path = \"C:\\\\Program Files\\\\nodejs;\" + $env:Path; Set-Location \"C:\\\\Users\\\\hakan\\\\WarehouseGroupProject\"; npx --yes create-vite@latest --help 2>&1)"
+    ]
+  }
+}
