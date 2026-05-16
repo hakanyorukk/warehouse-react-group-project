@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useData } from '../context/DataContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import PageHeader from '../components/PageHeader';
 import Table from '../components/Table';
@@ -9,26 +10,38 @@ import Icon from '../components/Icon';
 import { btnPrimary, btnSecondary, inputStyle } from '../styles';
 import { getStock } from '../helpers';
 
+const EMPTY = { sku: '', name: '', category_id: '', unit: 'pcs', min_stock: '5' };
+
+const linkBtn = {
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: 12.5,
+  fontWeight: 600,
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '4px 6px',
+};
+
 export default function Products() {
-  const { products, categories, movements, addProduct, loading } = useData();
+  const { products, categories, movements, addProduct, updateProduct, loading } = useData();
+  const { isAdmin } = useAuth();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({
-    sku: '',
-    name: '',
-    category_id: '',
-    unit: 'pcs',
-    min_stock: '5',
-  });
+  const [showArchived, setShowArchived] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editId, setEditId] = useState(null); // null = add mode
+  const [form, setForm] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const stock = getStock(movements, products);
 
   const filtered = products.filter((p) => {
+    if (!showArchived && p.is_active === false) return false;
     if (filterCat && p.category_id !== parseInt(filterCat)) return false;
     if (
       search &&
@@ -44,6 +57,32 @@ export default function Products() {
     setErrors((e) => ({ ...e, [k]: '' }));
   }
 
+  function openAdd() {
+    setEditId(null);
+    setForm(EMPTY);
+    setErrors({});
+    setFormOpen(true);
+  }
+
+  function openEdit(p) {
+    setEditId(p.id);
+    setForm({
+      sku: p.sku,
+      name: p.name,
+      category_id: String(p.category_id || ''),
+      unit: p.unit,
+      min_stock: String(p.min_stock),
+    });
+    setErrors({});
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditId(null);
+    setErrors({});
+  }
+
   function validate() {
     const e = {};
     if (!form.sku.trim()) e.sku = 'SKU is required';
@@ -51,14 +90,14 @@ export default function Products() {
     if (!form.category_id) e.category_id = 'Select a category';
     if (!form.unit.trim()) e.unit = 'Unit is required';
     if (!form.min_stock || parseInt(form.min_stock) < 0) e.min_stock = 'Enter a valid minimum stock';
-    if (
-      products.find((p) => p.sku.toLowerCase() === form.sku.trim().toLowerCase())
-    )
-      e.sku = 'SKU already exists';
+    const dup = products.find(
+      (p) => p.sku.toLowerCase() === form.sku.trim().toLowerCase() && p.id !== editId
+    );
+    if (dup) e.sku = 'SKU already exists';
     return e;
   }
 
-  async function handleAdd(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) {
@@ -66,36 +105,76 @@ export default function Products() {
       return;
     }
     setSaving(true);
-    const { error } = await addProduct({
+    const payload = {
       sku: form.sku.trim().toUpperCase(),
       name: form.name.trim(),
       category_id: parseInt(form.category_id),
       unit: form.unit.trim(),
       min_stock: parseInt(form.min_stock),
-    });
+    };
+    const { error } = editId
+      ? await updateProduct(editId, payload)
+      : await addProduct(payload);
     setSaving(false);
     if (error) {
       showToast(error.message, 'error');
       return;
     }
-    showToast(`Added ${form.name.trim()}`, 'success');
-    setShowAdd(false);
-    setForm({ sku: '', name: '', category_id: '', unit: 'pcs', min_stock: '5' });
+    showToast(editId ? `Updated ${payload.name}` : `Added ${payload.name}`, 'success');
+    closeForm();
   }
 
-  return (
-    <div>
-      <PageHeader title="Products" subtitle="Manage the product catalogue" />
+  async function toggleArchive(p) {
+    const archiving = p.is_active !== false;
+    const { error } = await updateProduct(p.id, { is_active: !archiving });
+    if (error) {
+      showToast(error.message, 'error');
+      return;
+    }
+    showToast(archiving ? `${p.name} archived` : `${p.name} restored`, 'success');
+  }
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 280 }}>
+  const columns = [
+    { key: 'sku', label: 'SKU' },
+    { key: 'name', label: 'Name' },
+    { key: 'category', label: 'Category' },
+    { key: 'stock', label: 'Stock', right: true },
+    { key: 'unit', label: 'Unit' },
+    { key: 'min', label: 'Min', right: true },
+    { key: 'status', label: 'Status' },
+  ];
+  if (isAdmin) columns.push({ key: 'actions', label: '' });
+
+  return (
+    <div className="fade-in">
+      <PageHeader
+        title="Products"
+        subtitle="Manage the product catalogue"
+        action={
+          isAdmin ? (
+            <button
+              className="btn-primary"
+              onClick={() => (formOpen && !editId ? closeForm() : openAdd())}
+              style={{ ...btnPrimary, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Icon name="plus" size={14} /> {formOpen && !editId ? 'Cancel' : 'Add Product'}
+            </button>
+          ) : null
+        }
+      />
+
+      <div
+        className="toolbar-row"
+        style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}
+      >
+        <div style={{ position: 'relative', flex: 1, minWidth: 180, maxWidth: 320 }}>
           <span
             style={{
               position: 'absolute',
-              left: 10,
+              left: 12,
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#94a3b8',
+              color: 'var(--c-text-soft)',
             }}
           >
             <Icon name="search" size={15} />
@@ -104,13 +183,13 @@ export default function Products() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or SKU…"
-            style={{ ...inputStyle, paddingLeft: 34 }}
+            style={{ ...inputStyle, paddingLeft: 36 }}
           />
         </div>
         <select
           value={filterCat}
           onChange={(e) => setFilterCat(e.target.value)}
-          style={{ ...inputStyle, width: 180 }}
+          style={{ ...inputStyle, width: 200 }}
         >
           <option value="">All categories</option>
           {categories.map((c) => (
@@ -119,31 +198,52 @@ export default function Products() {
             </option>
           ))}
         </select>
-        <button
-          onClick={() => setShowAdd((s) => !s)}
-          style={{ ...btnPrimary, marginLeft: 'auto', whiteSpace: 'nowrap' }}
-        >
-          {showAdd ? 'Cancel' : '+ Add Product'}
-        </button>
+        {isAdmin && (
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              fontSize: 13,
+              color: 'var(--c-text-muted)',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              style={{ accentColor: 'var(--c-primary)' }}
+            />
+            Show archived
+          </label>
+        )}
       </div>
 
-      {showAdd && (
+      {isAdmin && formOpen && (
         <div
           style={{
-            background: '#fff',
-            borderRadius: 10,
-            border: '1px solid #e5e7eb',
+            background: 'var(--c-surface)',
+            borderRadius: 'var(--r-lg)',
+            border: '1px solid var(--c-border)',
             padding: 20,
             marginBottom: 20,
+            boxShadow: 'var(--shadow-sm)',
           }}
         >
           <div
-            style={{ fontSize: 14, fontWeight: 600, marginBottom: 16, color: '#374151' }}
+            style={{
+              fontFamily: 'var(--font-head)',
+              fontSize: 15,
+              fontWeight: 600,
+              marginBottom: 16,
+            }}
           >
-            Add New Product
+            {editId ? 'Edit product' : 'Add new product'}
           </div>
-          <form onSubmit={handleAdd}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          <form onSubmit={handleSubmit}>
+            <div className="grid-add-product">
               <FormField label="SKU *" error={errors.sku}>
                 <input
                   value={form.sku}
@@ -178,7 +278,7 @@ export default function Products() {
                 <input
                   value={form.unit}
                   onChange={(e) => set('unit', e.target.value)}
-                  placeholder="pcs / kg / litre…"
+                  placeholder="pcs / kg / litre"
                   style={inputStyle}
                 />
               </FormField>
@@ -192,17 +292,15 @@ export default function Products() {
                 />
               </FormField>
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-              <button type="submit" disabled={saving} style={btnPrimary}>
-                {saving ? 'Saving…' : 'Save Product'}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="submit" className="btn-primary" disabled={saving} style={btnPrimary}>
+                {saving ? 'Saving…' : editId ? 'Update Product' : 'Save Product'}
               </button>
               <button
                 type="button"
+                className="btn-secondary"
                 style={btnSecondary}
-                onClick={() => {
-                  setShowAdd(false);
-                  setErrors({});
-                }}
+                onClick={closeForm}
               >
                 Cancel
               </button>
@@ -212,36 +310,79 @@ export default function Products() {
       )}
 
       <Table
-        columns={[
-          { key: 'sku', label: 'SKU' },
-          { key: 'name', label: 'Name' },
-          { key: 'category', label: 'Category' },
-          { key: 'stock', label: 'Stock', right: true },
-          { key: 'unit', label: 'Unit' },
-          { key: 'min', label: 'Min', right: true },
-          { key: 'status', label: 'Status' },
-        ]}
+        columns={columns}
         rows={filtered.map((p) => {
           const cat = categories.find((c) => c.id === p.category_id);
           const s = stock[p.id] ?? 0;
+          const archived = p.is_active === false;
+          const muted = archived ? { color: 'var(--c-text-soft)' } : null;
           return {
             sku: (
-              <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 12, color: '#64748b' }}>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 12,
+                  color: 'var(--c-text-muted)',
+                  ...muted,
+                }}
+              >
                 {p.sku}
               </span>
             ),
-            name: <span style={{ fontWeight: 500 }}>{p.name}</span>,
-            category: cat?.name || '—',
+            name: <span style={{ fontWeight: 500, ...muted }}>{p.name}</span>,
+            category: <span style={muted}>{cat?.name || '—'}</span>,
             stock: (
               <span
-                style={{ fontWeight: 700, color: s <= p.min_stock ? '#d97706' : '#15803d' }}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontWeight: 700,
+                  color: archived
+                    ? 'var(--c-text-soft)'
+                    : s <= p.min_stock
+                      ? 'var(--c-warning)'
+                      : 'var(--c-success)',
+                }}
               >
                 {s}
               </span>
             ),
-            unit: p.unit,
-            min: p.min_stock,
-            status: <Badge type={s <= p.min_stock ? 'LOW' : 'OK'} />,
+            unit: <span style={muted}>{p.unit}</span>,
+            min: <span style={muted}>{p.min_stock}</span>,
+            status: archived ? (
+              <span
+                style={{
+                  background: 'var(--c-surface-alt)',
+                  color: 'var(--c-text-muted)',
+                  border: '1px solid var(--c-border)',
+                  padding: '3px 9px',
+                  borderRadius: 4,
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                ARCHIVED
+              </span>
+            ) : (
+              <Badge type={s <= p.min_stock ? 'LOW' : 'OK'} />
+            ),
+            actions: isAdmin ? (
+              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => openEdit(p)}
+                  style={{ ...linkBtn, color: 'var(--c-primary)' }}
+                >
+                  <Icon name="edit" size={13} /> Edit
+                </button>
+                <button
+                  onClick={() => toggleArchive(p)}
+                  style={{ ...linkBtn, color: 'var(--c-text-muted)' }}
+                >
+                  <Icon name="archive" size={13} /> {archived ? 'Restore' : 'Archive'}
+                </button>
+              </div>
+            ) : null,
           };
         })}
         emptyMsg={loading ? 'Loading…' : 'No products found'}

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
@@ -8,18 +9,39 @@ import Icon from '../components/Icon';
 import { btnPrimary, btnSecondary, inputStyle } from '../styles';
 import { fmtDate, fmtDateTime } from '../helpers';
 
+const filterLabel = {
+  fontSize: 12,
+  fontWeight: 500,
+  color: 'var(--c-text-muted)',
+  display: 'block',
+  marginBottom: 4,
+};
+
+const sectionTitle = {
+  fontFamily: 'var(--font-head)',
+  fontSize: 15,
+  fontWeight: 600,
+  color: 'var(--c-text)',
+  marginBottom: 10,
+};
+
 export default function Reports() {
-  const { products, categories, movements } = useData();
+  const { products, categories, movements, staff } = useData();
+  const location = useLocation();
 
   const [filterProduct, setFilterProduct] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterStaff, setFilterStaff] = useState(location.state?.staffId || '');
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [filterType, setFilterType] = useState('');
 
+  const staffName = (id) => staff.find((s) => s.id === id)?.full_name || '—';
+
   const filtered = useMemo(() => {
     return movements.filter((m) => {
       if (filterProduct && m.product_id !== parseInt(filterProduct)) return false;
+      if (filterStaff && m.user_id !== filterStaff) return false;
       if (filterCategory) {
         const p = products.find((x) => x.id === m.product_id);
         if (!p || p.category_id !== parseInt(filterCategory)) return false;
@@ -29,15 +51,14 @@ export default function Reports() {
       if (filterTo && new Date(m.created_at) > new Date(filterTo + 'T23:59:59')) return false;
       return true;
     });
-  }, [movements, products, filterProduct, filterCategory, filterType, filterFrom, filterTo]);
+  }, [movements, products, filterProduct, filterStaff, filterCategory, filterType, filterFrom, filterTo]);
 
   const byProduct = useMemo(() => {
     const map = {};
     filtered.forEach((m) => {
-      if (!map[m.product_id]) map[m.product_id] = { in: 0, out: 0, count: 0 };
+      if (!map[m.product_id]) map[m.product_id] = { in: 0, out: 0 };
       if (m.movement_type === 'IN') map[m.product_id].in += m.quantity;
       if (m.movement_type === 'OUT') map[m.product_id].out += m.quantity;
-      map[m.product_id].count++;
     });
     return map;
   }, [filtered]);
@@ -48,17 +69,18 @@ export default function Reports() {
     .reduce((s, m) => s + m.quantity, 0);
 
   function exportCSV() {
-    const header = 'Date,Product,SKU,Type,Quantity,Notes\n';
+    const header = 'Date,Product,SKU,Type,Quantity,Recorded by,Notes\n';
+    const safe = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const rows = filtered
       .map((m) => {
         const p = products.find((x) => x.id === m.product_id);
-        const safe = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
         return [
           safe(fmtDateTime(m.created_at)),
           safe(p?.name || ''),
           safe(p?.sku || ''),
           safe(m.movement_type),
           safe(m.quantity),
+          safe(staffName(m.user_id)),
           safe(m.notes || ''),
         ].join(',');
       })
@@ -77,41 +99,34 @@ export default function Reports() {
     : products;
 
   return (
-    <div>
+    <div className="fade-in">
       <PageHeader title="Stock Report" subtitle="Filter and analyse stock movements" />
 
       <div
         style={{
-          background: '#fff',
-          borderRadius: 10,
-          border: '1px solid #e5e7eb',
+          background: 'var(--c-surface)',
+          borderRadius: 'var(--r-lg)',
+          border: '1px solid var(--c-border)',
           padding: '16px 20px',
           marginBottom: 20,
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12 }}>
-          Filters
-        </div>
         <div
           style={{
-            display: 'flex',
-            gap: 12,
-            flexWrap: 'wrap',
-            alignItems: 'flex-end',
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--c-text-muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            marginBottom: 12,
           }}
         >
-          <div style={{ flex: '1 1 160px' }}>
-            <label
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: '#64748b',
-                display: 'block',
-                marginBottom: 4,
-              }}
-            >
-              Category
-            </label>
+          Filters
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ flex: '1 1 150px' }}>
+            <label style={filterLabel}>Category</label>
             <select
               value={filterCategory}
               onChange={(e) => {
@@ -128,18 +143,8 @@ export default function Reports() {
               ))}
             </select>
           </div>
-          <div style={{ flex: '1 1 180px' }}>
-            <label
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: '#64748b',
-                display: 'block',
-                marginBottom: 4,
-              }}
-            >
-              Product
-            </label>
+          <div style={{ flex: '1 1 160px' }}>
+            <label style={filterLabel}>Product</label>
             <select
               value={filterProduct}
               onChange={(e) => setFilterProduct(e.target.value)}
@@ -153,40 +158,31 @@ export default function Reports() {
               ))}
             </select>
           </div>
-          <div style={{ flex: '1 1 120px' }}>
-            <label
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: '#64748b',
-                display: 'block',
-                marginBottom: 4,
-              }}
-            >
-              Type
-            </label>
+          <div style={{ flex: '1 1 160px' }}>
+            <label style={filterLabel}>Staff member</label>
             <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              value={filterStaff}
+              onChange={(e) => setFilterStaff(e.target.value)}
               style={inputStyle}
             >
+              <option value="">All staff</option>
+              {staff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ flex: '1 1 110px' }}>
+            <label style={filterLabel}>Type</label>
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={inputStyle}>
               <option value="">IN + OUT</option>
               <option value="IN">IN only</option>
               <option value="OUT">OUT only</option>
             </select>
           </div>
           <div style={{ flex: '1 1 130px' }}>
-            <label
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: '#64748b',
-                display: 'block',
-                marginBottom: 4,
-              }}
-            >
-              From date
-            </label>
+            <label style={filterLabel}>From</label>
             <input
               type="date"
               value={filterFrom}
@@ -195,17 +191,7 @@ export default function Reports() {
             />
           </div>
           <div style={{ flex: '1 1 130px' }}>
-            <label
-              style={{
-                fontSize: 12,
-                fontWeight: 500,
-                color: '#64748b',
-                display: 'block',
-                marginBottom: 4,
-              }}
-            >
-              To date
-            </label>
+            <label style={filterLabel}>To</label>
             <input
               type="date"
               value={filterTo}
@@ -214,18 +200,21 @@ export default function Reports() {
             />
           </div>
           <button
+            className="btn-secondary"
             onClick={() => {
               setFilterProduct('');
               setFilterCategory('');
+              setFilterStaff('');
               setFilterFrom('');
               setFilterTo('');
               setFilterType('');
             }}
             style={{ ...btnSecondary, height: 40, whiteSpace: 'nowrap' }}
           >
-            Clear Filters
+            Clear
           </button>
           <button
+            className="btn-primary"
             onClick={exportCSV}
             style={{
               ...btnPrimary,
@@ -243,20 +232,18 @@ export default function Reports() {
 
       <div style={{ display: 'flex', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
         <StatCard label="Movements" value={filtered.length} />
-        <StatCard label="Total IN" value={totalIn} accent="#15803d" />
-        <StatCard label="Total OUT" value={totalOut} accent="#b91c1c" />
+        <StatCard label="Total IN" value={totalIn} accent="var(--c-success)" />
+        <StatCard label="Total OUT" value={totalOut} accent="var(--c-danger)" />
         <StatCard
           label="Net Change"
           value={(totalIn - totalOut >= 0 ? '+' : '') + (totalIn - totalOut)}
-          accent={totalIn - totalOut >= 0 ? '#15803d' : '#b91c1c'}
+          accent={totalIn - totalOut >= 0 ? 'var(--c-success)' : 'var(--c-danger)'}
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="grid-halves">
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
-            Summary by Product
-          </div>
+          <div style={sectionTitle}>Summary by product</div>
           <Table
             columns={[
               { key: 'product', label: 'Product' },
@@ -268,12 +255,24 @@ export default function Reports() {
               const p = products.find((x) => x.id === parseInt(pid));
               const net = d.in - d.out;
               return {
-                product: p?.name || '—',
-                in: <span style={{ color: '#15803d', fontWeight: 600 }}>{d.in}</span>,
-                out: <span style={{ color: '#b91c1c', fontWeight: 600 }}>{d.out}</span>,
+                product: <span style={{ fontWeight: 500 }}>{p?.name || '—'}</span>,
+                in: (
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--c-success)', fontWeight: 600 }}>
+                    {d.in}
+                  </span>
+                ),
+                out: (
+                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--c-danger)', fontWeight: 600 }}>
+                    {d.out}
+                  </span>
+                ),
                 net: (
                   <span
-                    style={{ color: net >= 0 ? '#15803d' : '#b91c1c', fontWeight: 700 }}
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      color: net >= 0 ? 'var(--c-success)' : 'var(--c-danger)',
+                      fontWeight: 700,
+                    }}
                   >
                     {net >= 0 ? '+' : ''}
                     {net}
@@ -281,26 +280,18 @@ export default function Reports() {
                 ),
               };
             })}
-            emptyMsg="No movements match the selected filters"
+            emptyMsg="No movements match filters"
           />
         </div>
 
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
-            Movement Log ({filtered.length})
-          </div>
-          <div
-            style={{
-              maxHeight: 400,
-              overflowY: 'auto',
-              borderRadius: 10,
-              border: '1px solid #e5e7eb',
-            }}
-          >
+          <div style={sectionTitle}>Movement log ({filtered.length})</div>
+          <div style={{ maxHeight: 460, overflowY: 'auto', borderRadius: 'var(--r-lg)' }}>
             <Table
               columns={[
                 { key: 'date', label: 'Date' },
                 { key: 'product', label: 'Product' },
+                { key: 'by', label: 'Recorded by' },
                 { key: 'type', label: 'Type' },
                 { key: 'qty', label: 'Qty', right: true },
               ]}
@@ -312,21 +303,27 @@ export default function Reports() {
                     date: (
                       <span
                         style={{
-                          fontFamily: 'IBM Plex Mono',
-                          fontSize: 11,
-                          color: '#64748b',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11.5,
+                          color: 'var(--c-text-muted)',
                         }}
                       >
                         {fmtDate(m.created_at)}
                       </span>
                     ),
                     product: p?.name,
+                    by: (
+                      <span style={{ fontSize: 12.5, color: 'var(--c-text-muted)' }}>
+                        {staffName(m.user_id)}
+                      </span>
+                    ),
                     type: <Badge type={m.movement_type} />,
                     qty: (
                       <span
                         style={{
+                          fontFamily: 'var(--font-mono)',
                           fontWeight: 700,
-                          color: m.movement_type === 'IN' ? '#15803d' : '#b91c1c',
+                          color: m.movement_type === 'IN' ? 'var(--c-success)' : 'var(--c-danger)',
                         }}
                       >
                         {m.movement_type === 'IN' ? '+' : '−'}

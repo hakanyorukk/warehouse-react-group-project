@@ -1,4 +1,4 @@
-export default function FormField({ label, error, children }) {
+export default function FormField({ label, error, hint, children }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <label
@@ -6,14 +6,21 @@ export default function FormField({ label, error, children }) {
           display: 'block',
           fontSize: 13,
           fontWeight: 500,
-          color: '#374151',
-          marginBottom: 5,
+          color: 'var(--c-text)',
+          marginBottom: 6,
         }}
       >
         {label}
       </label>
       {children}
-      {error && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4 }}>{error}</div>}
+      {hint && !error && (
+        <div style={{ fontSize: 12, color: 'var(--c-text-soft)', marginTop: 5 }}>{hint}</div>
+      )}
+      {error && (
+        <div style={{ fontSize: 12, color: 'var(--c-danger)', marginTop: 5, fontWeight: 500 }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }

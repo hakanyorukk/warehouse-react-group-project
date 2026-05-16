@@ -5,8 +5,25 @@ import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import Table from '../components/Table';
 import FormField from '../components/FormField';
+import Icon from '../components/Icon';
 import { btnDanger, btnSecondary, inputStyle } from '../styles';
 import { fmtDateTime, getStock } from '../helpers';
+
+const cardStyle = {
+  background: 'var(--c-surface)',
+  borderRadius: 'var(--r-lg)',
+  border: '1px solid var(--c-border)',
+  padding: 24,
+  boxShadow: 'var(--shadow-sm)',
+};
+
+const sectionTitle = {
+  fontFamily: 'var(--font-head)',
+  fontSize: 15,
+  fontWeight: 600,
+  color: 'var(--c-text)',
+  marginBottom: 10,
+};
 
 export default function WriteDown() {
   const { products, categories, movements, addMovement } = useData();
@@ -20,10 +37,10 @@ export default function WriteDown() {
   const [saving, setSaving] = useState(false);
 
   const selectedProduct = products.find((p) => p.id === parseInt(form.product_id));
-  const currentStock = selectedProduct ? stock[selectedProduct.id] ?? 0 : 0;
   const selectedCategory = selectedProduct
     ? categories.find((c) => c.id === selectedProduct.category_id)
     : null;
+  const currentStock = selectedProduct ? stock[selectedProduct.id] ?? 0 : 0;
 
   function set(key, val) {
     setForm((f) => ({ ...f, [key]: val }));
@@ -70,39 +87,46 @@ export default function WriteDown() {
   const remaining = currentStock - qty;
 
   return (
-    <div>
+    <div className="fade-in">
       <PageHeader
         title="Write-Down"
-        subtitle="Record outgoing goods or stock reductions — decreases stock level"
+        subtitle="Record outgoing goods or stock reductions. This decreases stock levels."
       />
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '400px 1fr',
-          gap: 24,
-          alignItems: 'start',
-        }}
-      >
-        <div
-          style={{
-            background: '#fff',
-            borderRadius: 10,
-            border: '1px solid #e5e7eb',
-            padding: 24,
-          }}
-        >
+      <div className="grid-form">
+        <div style={cardStyle}>
           <div
             style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#374151',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
               marginBottom: 20,
-              paddingBottom: 12,
-              borderBottom: '1px solid #f1f5f9',
+              paddingBottom: 14,
+              borderBottom: '1px solid var(--c-border)',
             }}
           >
-            New Outbound / Write-Down
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: 'var(--c-danger-bg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="writedown" size={17} color="var(--c-danger)" />
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-head)', fontSize: 15, fontWeight: 600 }}>
+                New Write-Down
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>
+                Record stock issued, damaged, or removed
+              </div>
+            </div>
           </div>
+
           <form onSubmit={handleSubmit}>
             <FormField label="Product *" error={errors.product_id}>
               <select
@@ -114,7 +138,7 @@ export default function WriteDown() {
                 {categories.map((cat) => (
                   <optgroup key={cat.id} label={cat.name}>
                     {products
-                      .filter((p) => p.category_id === cat.id)
+                      .filter((p) => p.category_id === cat.id && p.is_active !== false)
                       .map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name} ({p.sku})
@@ -128,34 +152,36 @@ export default function WriteDown() {
             {selectedProduct && (
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
+                  background: 'var(--c-surface-alt)',
+                  border: '1px solid var(--c-border)',
+                  borderRadius: 'var(--r-sm)',
                   padding: '12px 14px',
                   marginBottom: 16,
                   fontSize: 13,
                 }}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>SKU:</span>{' '}
-                    <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--c-text-soft)' }}>SKU:</span>{' '}
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
                       {selectedProduct.sku}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Unit:</span> {selectedProduct.unit}
+                    <span style={{ color: 'var(--c-text-soft)' }}>Unit:</span> {selectedProduct.unit}
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Category:</span>{' '}
+                    <span style={{ color: 'var(--c-text-soft)' }}>Category:</span>{' '}
                     {selectedCategory?.name}
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Current Stock:</span>{' '}
+                    <span style={{ color: 'var(--c-text-soft)' }}>Available:</span>{' '}
                     <strong
                       style={{
                         color:
-                          currentStock <= selectedProduct.min_stock ? '#d97706' : '#15803d',
+                          currentStock <= selectedProduct.min_stock
+                            ? 'var(--c-warning)'
+                            : 'var(--c-success)',
                       }}
                     >
                       {currentStock}
@@ -182,23 +208,29 @@ export default function WriteDown() {
             {selectedProduct && qty > 0 && qty <= currentStock && (
               <div
                 style={{
-                  background: remaining <= selectedProduct.min_stock ? '#fef9c3' : '#f0fdf4',
+                  background:
+                    remaining <= selectedProduct.min_stock
+                      ? 'var(--c-warning-bg)'
+                      : 'var(--c-surface-alt)',
                   border: `1px solid ${
-                    remaining <= selectedProduct.min_stock ? '#fde68a' : '#bbf7d0'
+                    remaining <= selectedProduct.min_stock ? '#fde68a' : 'var(--c-border)'
                   }`,
-                  borderRadius: 7,
-                  padding: '9px 13px',
+                  borderRadius: 'var(--r-sm)',
+                  padding: '10px 13px',
                   marginBottom: 16,
                   fontSize: 13,
-                  color: remaining <= selectedProduct.min_stock ? '#92400e' : '#166534',
+                  color: remaining <= selectedProduct.min_stock ? 'var(--c-warning)' : 'var(--c-text)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
                 }}
               >
-                {remaining <= selectedProduct.min_stock && <span>⚠ </span>}
-                Stock after write-down:{' '}
+                {remaining <= selectedProduct.min_stock && <Icon name="warn" size={14} />}
+                Stock after:{' '}
                 <strong>
                   {remaining} {selectedProduct.unit}
                 </strong>
-                {remaining <= selectedProduct.min_stock && ' — below minimum threshold'}
+                {remaining <= selectedProduct.min_stock && ' — below minimum'}
               </div>
             )}
 
@@ -206,18 +238,24 @@ export default function WriteDown() {
               <textarea
                 value={form.notes}
                 onChange={(e) => set('notes', e.target.value)}
-                placeholder="e.g. Issued to department, damaged, expired..."
+                placeholder="e.g. Issued to department, damaged, expired…"
                 rows={3}
                 style={{ ...inputStyle, resize: 'vertical' }}
               />
             </FormField>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-              <button type="submit" disabled={saving} style={{ ...btnDanger, flex: 1 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button
+                type="submit"
+                className="btn-danger"
+                disabled={saving}
+                style={{ ...btnDanger, flex: 1 }}
+              >
                 {saving ? 'Saving…' : 'Record Write-Down'}
               </button>
               <button
                 type="button"
+                className="btn-secondary"
                 style={btnSecondary}
                 onClick={() => {
                   setForm({ product_id: '', quantity: '', notes: '' });
@@ -231,12 +269,10 @@ export default function WriteDown() {
         </div>
 
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
-            Recent Write-Downs
-          </div>
+          <div style={sectionTitle}>Recent write-downs</div>
           <Table
             columns={[
-              { key: 'date', label: 'Date/Time' },
+              { key: 'date', label: 'Date' },
               { key: 'product', label: 'Product' },
               { key: 'sku', label: 'SKU' },
               { key: 'qty', label: 'Qty', right: true },
@@ -250,23 +286,33 @@ export default function WriteDown() {
                 return {
                   date: (
                     <span
-                      style={{ fontFamily: 'IBM Plex Mono', fontSize: 12, color: '#64748b' }}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11.5,
+                        color: 'var(--c-text-muted)',
+                      }}
                     >
                       {fmtDateTime(m.created_at)}
                     </span>
                   ),
-                  product: p?.name,
+                  product: <span style={{ fontWeight: 500 }}>{p?.name}</span>,
                   sku: (
                     <span
-                      style={{ fontFamily: 'IBM Plex Mono', fontSize: 12, color: '#64748b' }}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        color: 'var(--c-text-muted)',
+                      }}
                     >
                       {p?.sku}
                     </span>
                   ),
                   qty: (
-                    <span style={{ fontWeight: 700, color: '#b91c1c' }}>−{m.quantity}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--c-danger)' }}>
+                      −{m.quantity}
+                    </span>
                   ),
-                  notes: m.notes || <span style={{ color: '#94a3b8' }}>—</span>,
+                  notes: m.notes || <span style={{ color: 'var(--c-text-soft)' }}>—</span>,
                 };
               })}
             emptyMsg="No write-downs yet"

@@ -9,12 +9,13 @@ export default function ProtectedRoute({ children }) {
       <div
         style={{
           width: '100%',
-          height: '100vh',
+          height: '100%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#64748b',
+          color: 'var(--c-text-muted)',
           fontSize: 14,
+          background: 'var(--c-bg)',
         }}
       >
         Loading…

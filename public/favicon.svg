@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#1f4d3d"/>
+  <g transform="translate(32 32) scale(0.78) translate(-32 -26)" fill="#ffffff">
+    <!-- back box (top) -->
+    <path d="M32 4 L48 12 L32 20 L16 12 Z" opacity="0.95"/>
+    <path d="M16 12 L32 20 L32 32 L16 24 Z" opacity="0.62"/>
+    <path d="M48 12 L32 20 L32 32 L48 24 Z" opacity="0.8"/>
+    <!-- front-left box -->
+    <g transform="translate(-10 16)">
+      <path d="M32 4 L48 12 L32 20 L16 12 Z" opacity="0.9"/>
+      <path d="M16 12 L32 20 L32 32 L16 24 Z" opacity="0.58"/>
+      <path d="M48 12 L32 20 L32 32 L48 24 Z" opacity="0.75"/>
+    </g>
+    <!-- front-right box -->
+    <g transform="translate(10 16)">
+      <path d="M32 4 L48 12 L32 20 L16 12 Z" opacity="1"/>
+      <path d="M16 12 L32 20 L32 32 L16 24 Z" opacity="0.66"/>
+      <path d="M48 12 L32 20 L32 32 L48 24 Z" opacity="0.85"/>
+    </g>
+  </g>
+</svg>

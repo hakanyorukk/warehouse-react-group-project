@@ -1,10 +1,32 @@
-export default function PageHeader({ title, subtitle }) {
+export default function PageHeader({ title, subtitle, action }) {
   return (
-    <div style={{ marginBottom: 24 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, color: '#1a1a2e', letterSpacing: '-0.02em' }}>
-        {title}
-      </h1>
-      {subtitle && <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>{subtitle}</p>}
+    <div
+      style={{
+        marginBottom: 24,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        gap: 16,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div>
+        <h1
+          style={{
+            fontFamily: 'var(--font-head)',
+            fontSize: 26,
+            fontWeight: 600,
+            color: 'var(--c-text)',
+            letterSpacing: '-0.025em',
+          }}
+        >
+          {title}
+        </h1>
+        {subtitle && (
+          <p style={{ fontSize: 13.5, color: 'var(--c-text-muted)', marginTop: 4 }}>{subtitle}</p>
+        )}
+      </div>
+      {action}
     </div>
   );
 }

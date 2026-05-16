@@ -1,40 +1,37 @@
 export const inputStyle = {
   width: '100%',
-  padding: '9px 12px',
-  border: '1px solid #d1d5db',
-  borderRadius: 7,
+  padding: '10px 13px',
+  border: '1px solid var(--c-border-strong)',
+  borderRadius: 'var(--r-sm)',
   fontSize: 14,
-  fontFamily: 'inherit',
   background: '#fff',
-  color: '#1a1a2e',
-  outline: 'none',
+  color: 'var(--c-text)',
 };
 
 export const btnPrimary = {
   padding: '10px 22px',
-  background: '#2e3a6e',
+  background: 'var(--c-primary)',
   color: '#fff',
   border: 'none',
-  borderRadius: 7,
+  borderRadius: 'var(--r-sm)',
   fontSize: 14,
   fontWeight: 600,
-  fontFamily: 'inherit',
   cursor: 'pointer',
+  letterSpacing: '0.01em',
 };
 
 export const btnSecondary = {
   padding: '10px 22px',
-  background: '#f1f5f9',
-  color: '#374151',
-  border: '1px solid #d1d5db',
-  borderRadius: 7,
+  background: 'var(--c-surface-alt)',
+  color: 'var(--c-text)',
+  border: '1px solid var(--c-border-strong)',
+  borderRadius: 'var(--r-sm)',
   fontSize: 14,
   fontWeight: 500,
-  fontFamily: 'inherit',
   cursor: 'pointer',
 };
 
 export const btnDanger = {
   ...btnPrimary,
-  background: '#7f1d1d',
+  background: 'var(--c-danger)',
 };

@@ -5,8 +5,25 @@ import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import Table from '../components/Table';
 import FormField from '../components/FormField';
+import Icon from '../components/Icon';
 import { btnPrimary, btnSecondary, inputStyle } from '../styles';
 import { fmtDateTime, getStock } from '../helpers';
+
+const cardStyle = {
+  background: 'var(--c-surface)',
+  borderRadius: 'var(--r-lg)',
+  border: '1px solid var(--c-border)',
+  padding: 24,
+  boxShadow: 'var(--shadow-sm)',
+};
+
+const sectionTitle = {
+  fontFamily: 'var(--font-head)',
+  fontSize: 15,
+  fontWeight: 600,
+  color: 'var(--c-text)',
+  marginBottom: 10,
+};
 
 export default function StockEntry() {
   const { products, suppliers, categories, movements, addMovement } = useData();
@@ -15,12 +32,7 @@ export default function StockEntry() {
 
   const stock = getStock(movements, products);
 
-  const [form, setForm] = useState({
-    product_id: '',
-    quantity: '',
-    supplier_id: '',
-    notes: '',
-  });
+  const [form, setForm] = useState({ product_id: '', quantity: '', supplier_id: '', notes: '' });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -37,8 +49,7 @@ export default function StockEntry() {
   function validate() {
     const e = {};
     if (!form.product_id) e.product_id = 'Please select a product';
-    if (!form.quantity || parseInt(form.quantity) <= 0)
-      e.quantity = 'Enter a valid quantity (> 0)';
+    if (!form.quantity || parseInt(form.quantity) <= 0) e.quantity = 'Enter a valid quantity (> 0)';
     return e;
   }
 
@@ -68,39 +79,46 @@ export default function StockEntry() {
   }
 
   return (
-    <div>
+    <div className="fade-in">
       <PageHeader
         title="Stock Entry"
-        subtitle="Record incoming goods — increases stock level"
+        subtitle="Record incoming goods. This increases stock levels."
       />
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '400px 1fr',
-          gap: 24,
-          alignItems: 'start',
-        }}
-      >
-        <div
-          style={{
-            background: '#fff',
-            borderRadius: 10,
-            border: '1px solid #e5e7eb',
-            padding: 24,
-          }}
-        >
+      <div className="grid-form">
+        <div style={cardStyle}>
           <div
             style={{
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#374151',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
               marginBottom: 20,
-              paddingBottom: 12,
-              borderBottom: '1px solid #f1f5f9',
+              paddingBottom: 14,
+              borderBottom: '1px solid var(--c-border)',
             }}
           >
-            New Inbound Entry
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: 'var(--c-success-bg)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="entry" size={17} color="var(--c-success)" />
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-head)', fontSize: 15, fontWeight: 600 }}>
+                New Inbound Entry
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--c-text-muted)' }}>
+                Record stock received from supplier
+              </div>
+            </div>
           </div>
+
           <form onSubmit={handleSubmit}>
             <FormField label="Product *" error={errors.product_id}>
               <select
@@ -112,7 +130,7 @@ export default function StockEntry() {
                 {categories.map((cat) => (
                   <optgroup key={cat.id} label={cat.name}>
                     {products
-                      .filter((p) => p.category_id === cat.id)
+                      .filter((p) => p.category_id === cat.id && p.is_active !== false)
                       .map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name} ({p.sku})
@@ -126,35 +144,31 @@ export default function StockEntry() {
             {selectedProduct && (
               <div
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: 8,
+                  background: 'var(--c-surface-alt)',
+                  border: '1px solid var(--c-border)',
+                  borderRadius: 'var(--r-sm)',
                   padding: '12px 14px',
                   marginBottom: 16,
                   fontSize: 13,
                 }}
               >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>SKU:</span>{' '}
-                    <span style={{ fontFamily: 'IBM Plex Mono', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--c-text-soft)' }}>SKU:</span>{' '}
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 500 }}>
                       {selectedProduct.sku}
                     </span>
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Unit:</span> {selectedProduct.unit}
+                    <span style={{ color: 'var(--c-text-soft)' }}>Unit:</span> {selectedProduct.unit}
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Category:</span>{' '}
+                    <span style={{ color: 'var(--c-text-soft)' }}>Category:</span>{' '}
                     {selectedCategory?.name}
                   </div>
                   <div>
-                    <span style={{ color: '#94a3b8' }}>Current Stock:</span>{' '}
+                    <span style={{ color: 'var(--c-text-soft)' }}>Current:</span>{' '}
                     <strong>{stock[selectedProduct.id] ?? 0}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: '#94a3b8' }}>Min Stock:</span>{' '}
-                    {selectedProduct.min_stock}
                   </div>
                 </div>
               </div>
@@ -177,19 +191,22 @@ export default function StockEntry() {
             {selectedProduct && form.quantity && parseInt(form.quantity) > 0 && (
               <div
                 style={{
-                  background: '#f0fdf4',
-                  border: '1px solid #bbf7d0',
-                  borderRadius: 7,
-                  padding: '9px 13px',
+                  background: 'var(--c-primary-soft)',
+                  border: '1px solid #c8d8cc',
+                  borderRadius: 'var(--r-sm)',
+                  padding: '10px 13px',
                   marginBottom: 16,
                   fontSize: 13,
-                  color: '#166534',
+                  color: 'var(--c-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
                 }}
               >
-                New stock level will be:{' '}
+                <Icon name="trend" size={14} />
+                New stock level:{' '}
                 <strong>
-                  {(stock[selectedProduct.id] ?? 0) + parseInt(form.quantity)}{' '}
-                  {selectedProduct.unit}
+                  {(stock[selectedProduct.id] ?? 0) + parseInt(form.quantity)} {selectedProduct.unit}
                 </strong>
               </div>
             )}
@@ -213,18 +230,24 @@ export default function StockEntry() {
               <textarea
                 value={form.notes}
                 onChange={(e) => set('notes', e.target.value)}
-                placeholder="e.g. Delivery reference, condition notes..."
+                placeholder="e.g. Delivery reference, condition notes…"
                 rows={3}
                 style={{ ...inputStyle, resize: 'vertical' }}
               />
             </FormField>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
-              <button type="submit" disabled={saving} style={{ ...btnPrimary, flex: 1 }}>
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={saving}
+                style={{ ...btnPrimary, flex: 1 }}
+              >
                 {saving ? 'Saving…' : 'Record Entry'}
               </button>
               <button
                 type="button"
+                className="btn-secondary"
                 style={btnSecondary}
                 onClick={() => {
                   setForm({ product_id: '', quantity: '', supplier_id: '', notes: '' });
@@ -238,12 +261,10 @@ export default function StockEntry() {
         </div>
 
         <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 10 }}>
-            Recent Stock Entries
-          </div>
+          <div style={sectionTitle}>Recent stock entries</div>
           <Table
             columns={[
-              { key: 'date', label: 'Date/Time' },
+              { key: 'date', label: 'Date' },
               { key: 'product', label: 'Product' },
               { key: 'sku', label: 'SKU' },
               { key: 'qty', label: 'Qty', right: true },
@@ -259,24 +280,34 @@ export default function StockEntry() {
                 return {
                   date: (
                     <span
-                      style={{ fontFamily: 'IBM Plex Mono', fontSize: 12, color: '#64748b' }}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11.5,
+                        color: 'var(--c-text-muted)',
+                      }}
                     >
                       {fmtDateTime(m.created_at)}
                     </span>
                   ),
-                  product: p?.name,
+                  product: <span style={{ fontWeight: 500 }}>{p?.name}</span>,
                   sku: (
                     <span
-                      style={{ fontFamily: 'IBM Plex Mono', fontSize: 12, color: '#64748b' }}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        color: 'var(--c-text-muted)',
+                      }}
                     >
                       {p?.sku}
                     </span>
                   ),
                   qty: (
-                    <span style={{ fontWeight: 700, color: '#15803d' }}>+{m.quantity}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--c-success)' }}>
+                      +{m.quantity}
+                    </span>
                   ),
-                  supplier: s?.name || <span style={{ color: '#94a3b8' }}>—</span>,
-                  notes: m.notes || <span style={{ color: '#94a3b8' }}>—</span>,
+                  supplier: s?.name || <span style={{ color: 'var(--c-text-soft)' }}>—</span>,
+                  notes: m.notes || <span style={{ color: 'var(--c-text-soft)' }}>—</span>,
                 };
               })}
             emptyMsg="No inbound entries yet"

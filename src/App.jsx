@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import AdminRoute from './components/AdminRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -9,6 +10,7 @@ import Products from './pages/Products';
 import StockEntry from './pages/StockEntry';
 import WriteDown from './pages/WriteDown';
 import Reports from './pages/Reports';
+import Users from './pages/Users';
 
 export default function App() {
   return (
@@ -30,6 +32,14 @@ export default function App() {
               <Route path="/entry" element={<StockEntry />} />
               <Route path="/writedown" element={<WriteDown />} />
               <Route path="/reports" element={<Reports />} />
+              <Route
+                path="/users"
+                element={
+                  <AdminRoute>
+                    <Users />
+                  </AdminRoute>
+                }
+              />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>

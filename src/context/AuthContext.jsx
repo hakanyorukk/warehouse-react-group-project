@@ -11,17 +11,29 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let active = true;
 
+    // Initial load: wait for both the session AND the profile so route
+    // guards (ProtectedRoute / AdminRoute) can read the role reliably.
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       setSession(data.session);
-      if (data.session?.user) await loadProfile(data.session.user.id);
-      setLoading(false);
+      if (data.session?.user) {
+        await loadProfile(data.session.user.id);
+      }
+      if (active) setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    // This callback must NOT be async and must NOT await a Supabase call
+    // directly — that deadlocks the auth lock. We defer loadProfile().
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (!active) return;
       setSession(newSession);
-      if (newSession?.user) await loadProfile(newSession.user.id);
-      else setProfile(null);
+      if (newSession?.user) {
+        setTimeout(() => {
+          if (active) loadProfile(newSession.user.id);
+        }, 0);
+      } else {
+        setProfile(null);
+      }
     });
 
     return () => {
@@ -31,27 +43,29 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function loadProfile(userId) {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
     setProfile(data);
   }
 
   async function signIn(email, password) {
-    return supabase.auth.signInWithPassword({ email, password });
-  }
-
-  async function signUp(email, password, fullName) {
-    return supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
-    });
+    const result = await supabase.auth.signInWithPassword({ email, password });
+    if (!result.error && result.data?.user) {
+      // Stamp last_login via a secure RPC (fire-and-forget).
+      supabase.rpc('record_login');
+    }
+    return result;
   }
 
   async function signOut() {
     await supabase.auth.signOut();
   }
 
-  const value = { session, profile, loading, signIn, signUp, signOut };
+  const isAdmin = profile?.role === 'admin';
+  const value = { session, profile, loading, isAdmin, signIn, signOut };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

@@ -1,8 +1,8 @@
 const STYLES = {
-  IN: { bg: '#dcfce7', color: '#15803d', label: 'IN' },
-  OUT: { bg: '#fee2e2', color: '#b91c1c', label: 'OUT' },
-  LOW: { bg: '#fef9c3', color: '#92400e', label: 'LOW' },
-  OK: { bg: '#f0fdf4', color: '#15803d', label: 'OK' },
+  IN: { bg: 'var(--c-success-bg)', color: 'var(--c-success)', label: 'IN' },
+  OUT: { bg: 'var(--c-danger-bg)', color: 'var(--c-danger)', label: 'OUT' },
+  LOW: { bg: 'var(--c-warning-bg)', color: 'var(--c-warning)', label: 'LOW' },
+  OK: { bg: 'var(--c-primary-soft)', color: 'var(--c-primary)', label: 'OK' },
 };
 
 export default function Badge({ type }) {
@@ -12,11 +12,13 @@ export default function Badge({ type }) {
       style={{
         background: s.bg,
         color: s.color,
-        padding: '2px 8px',
+        padding: '3px 9px',
         borderRadius: 4,
-        fontSize: 11,
+        fontSize: 10.5,
         fontWeight: 700,
-        letterSpacing: '0.05em',
+        letterSpacing: '0.06em',
+        fontFamily: 'var(--font-mono)',
+        display: 'inline-block',
       }}
     >
       {s.label}

@@ -1,7 +1,7 @@
 import Icon from './Icon';
 
 export default function Toast({ msg, type, onClose }) {
-  const colors = { success: '#15803d', error: '#dc2626' };
+  const colorByType = { success: 'var(--c-success)', error: 'var(--c-danger)' };
   return (
     <div
       style={{
@@ -9,18 +9,19 @@ export default function Toast({ msg, type, onClose }) {
         bottom: 28,
         right: 28,
         zIndex: 999,
-        background: '#1a1a2e',
+        background: 'var(--c-text)',
         color: '#fff',
-        borderRadius: 9,
+        borderRadius: 'var(--r-md)',
         padding: '13px 20px',
         fontSize: 14,
         fontWeight: 500,
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
-        borderLeft: `4px solid ${colors[type] || '#6c9fff'}`,
-        maxWidth: 340,
+        boxShadow: 'var(--shadow-lg)',
+        borderLeft: `4px solid ${colorByType[type] || 'var(--c-primary)'}`,
+        maxWidth: 380,
+        animation: 'fadeIn 0.25s ease-out',
       }}
     >
       {type === 'success' && <Icon name="check" size={16} color="#4ade80" />}
@@ -32,7 +33,7 @@ export default function Toast({ msg, type, onClose }) {
           marginLeft: 'auto',
           background: 'none',
           border: 'none',
-          color: '#8892b0',
+          color: '#cbd5e1',
           cursor: 'pointer',
           fontSize: 18,
           lineHeight: 1,
